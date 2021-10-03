@@ -27,7 +27,7 @@ defined('MOODLE_INTERNAL') || die();
 
 global $CFG;
 
-class activity_completion_testcase extends \advanced_testcase {
+class block_activity_completion_test extends \advanced_testcase {
 
     /**
      * course
@@ -71,37 +71,6 @@ class activity_completion_testcase extends \advanced_testcase {
         require_once($CFG->dirroot. '/course/lib.php');
     }
     /**
-     * Assert a user's activity completion status for a course module.
-     * @param object $course
-     * @param object $user
-     * @param object $cm
-     * @param table | html $html
-     */
-    private function assert_activity_completion($completiondata, $cm, $userid) {
-        $table = [];
-        $completiondata = $completion->get_data($cm, false, $userid);
-        if ($completiondata->completionstate == 0) { // Completion Status is added.
-            $status = '-';
-        } else {
-            $status = '<p class="btn btn-success">'.get_string('completed', 'block_activity_completion').'</p>';
-        }
-        $name = html_writer::link(
-            new moodle_url(
-                $CFG->wwwroot.'/mod/'.$cm->modname.'/view.php',
-                array('id' => $cm->id)
-            ),
-            "$cm->name", array('class' => 'btn btn-sm btn-primary text-color')
-        );
-        $table = array(
-            $completiondata->coursemoduleid,
-            $name,
-            date('d-M-Y', $cm->added),
-            $status
-        );
-        return $table;
-    }
-
-    /**
      * It will check block is in course context mode
      * @return array blockview
      */
@@ -119,15 +88,17 @@ class activity_completion_testcase extends \advanced_testcase {
      * @return array tablearraydata
      * @return html table
      */
-    public function display_tabledata($table, $tablearraydata) {
-        $tabeled = html_writer::table($tablearraydata);
+    public function display_tabledata($tablearraydata) {
+        $table = new \html_table();
+        $tabeled = \html_writer::table($tablearraydata);
         echo $tabeled;
     }
     /**
      * Setup testcase.
      * @return void
      */
-    public function setUp() {
+    public function test_setup() {
+        global $CFG;
         $this->resetAfterTest();
 
         // Setup test course.
@@ -138,9 +109,11 @@ class activity_completion_testcase extends \advanced_testcase {
             'enablecompletion' => 1
         ));
 
-        // Setup test page.
-        $this->page = $this->getDataGenerator()->create_module('page', array('course' => $this->course->id),
+        // Setup test activity .
+        $this->assign = $this->getDataGenerator()->create_module('assign', array('course' => $this->course->id),
             array('completion' => 2, 'completionview' => 1, 'idnumber' => 'activycompletion123'));
+        $this->quiz = $this->getDataGenerator()->create_module('quiz', array('course' => $this->course->id),
+            array('completion' => 2, 'completionview' => 1, 'idnumber' => 'activycompletion111', 'completionstate' => 1));
 
         // Setup test user.
         $this->user = self::getDataGenerator()->create_user((array(
@@ -155,21 +128,42 @@ class activity_completion_testcase extends \advanced_testcase {
         if ($view['course-view'] == true) {
             $user = $this->user;
             $userid = $user->id;
-            $table = new html_table();
+            $table = new \html_table();
             $table->head = (array) get_strings(array('cmid', 'name', 'startdate', 'status'), 'block_activity_completion');
             $modinfo = get_fast_modinfo($this->course);
             if (!empty($modinfo)) {
                 foreach ($modinfo->cms as $cm) {
-                    $completion = new completion_info($this->course);
+                    $completion = new \completion_info($this->course);
                     if (!$completion->is_enabled()) {
                         throw new moodle_exception('completionnotenabled', 'completion');
                     }
                     $completiondata = $completion->get_data($cm, false, $userid);
-                    $table->data[] = $this->assert_activity_completion($completiondata, $cm, $userid);
-                    $this->submit_for_user($user, $completion);
+                    if ($cm->modname == 'quiz') {
+                        $completiondata->completionstate = 1;
+                    } else {
+                        $completiondata->completionstate = $completiondata->completionstate;
+                    }
+                    if ($completiondata->completionstate == 0) { // Completion Status is added.
+                        $status = '-';
+                    } else {
+                        $status = '<p class="btn btn-success">'.get_string('completed', 'block_activity_completion').'</p>';
+                    }
+                    $name = \html_writer::link(
+                        new \moodle_url(
+                            $CFG->wwwroot.'/mod/'.$cm->modname.'/view.php',
+                            array('id' => $cm->id)
+                        ),
+                        "$cm->name", array('class' => 'btn btn-sm btn-primary text-color')
+                    );
+                    $table->data[] = array(
+                        $completiondata->coursemoduleid,
+                        $name,
+                        date('d-M-Y', $cm->added),
+                        $status
+                    );
                 }
-                $this->display_tabledata($table, $table->data);
             }
+            $this->display_tabledata($table);
         }
     }
 }
